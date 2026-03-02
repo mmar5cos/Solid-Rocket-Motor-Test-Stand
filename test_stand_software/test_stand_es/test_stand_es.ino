@@ -39,14 +39,34 @@ void xbee_init()
   Serial.println("Xbee init completed");
 }
 
-void xbee_read()
+String xbee_read()
 {
-  
+  static String line = "";
+
+  while (xbee.available())
+  {
+    char c = (char)xbee.read();
+
+    if (c == '\r') continue;   // ignore CR
+
+    if (c == '\n')
+    {
+      String out = line;
+      line = "";
+      out.trim();
+      return out;
+    }
+
+    line += c;
+  }
+
+  return "";  // no complete line yet
 }
 
-void xbee_send()
+void xbee_send(float value)
 {
-  
+    xbee.print(value, 4);   // 4 digits after decimal
+    xbee.print('\n');       // newline so receiver knows message ended
 }
 
 //
@@ -73,26 +93,24 @@ bool sd_init()
 // Write float to file
 //
 // example how to call: sd_write_float("thrust.txt", 12.345678);
-bool sd_write_float(String output_destination, float value)
+bool sd_write_float(const String& output_destination, float value)
 {
-    if (!sd_initialized)
-    {
-        Serial.println("SD not initialized!");
-        return false;
-    }
+  if (!sd_initialized)
+  {
+    Serial.println("SD not initialized!");
+    return false;
+  }
 
-    sd_file = SD.open(output_destination, FILE_WRITE);
+  File f = SD.open(output_destination, FILE_WRITE);
+  if (!f)
+  {
+    Serial.println("Failed to open file!");
+    return false;
+  }
 
-    if (!sd_file)
-    {
-        Serial.println("Failed to open file!");
-        return false;
-    }
-
-    sd_file.println(value, 6);  // 6 decimal precision
-    sd_file.close();
-
-    return true;
+  f.println(value, 6);
+  f.close();
+  return true;
 }
 
 // =========================================================================
@@ -159,43 +177,46 @@ void test_stand_init()
   Serial.begin(115200); // USB to Mac 
   
   Serial.println("Starting Test Stand Init");
-  //xbee_init();
-  //sd_init();
+  xbee_init();
+  sd_init();
   //load_cell_init();
   //mosfet_init();
   Serial.println("Test Stand Init Complete");
 }
 
-void collect_engine_data()
+void collect_engine_data(const String& test_name)
 {
-  for(int time=0; time<MAX_ENGINE_TIME_MS; time+=LOAD_DELAY_MS)
-  {
+  Serial.print("Logging to: ");
+  Serial.println(test_name);
 
-    // read in load data
+  for (int time = 0; time < MAX_ENGINE_TIME_MS; time += LOAD_DELAY_MS)
+  {
+    // TODO: replace this with load_cell_read()
     float weight = (float)time;
+
     Serial.println("Read in weight from load cell:");
     Serial.println(weight);
 
-    // save to SD card
-    //sd_write_float("file_name_based_off_xbee_command", weight);
+
+    sd_write_float(test_name, weight);
     Serial.println("Saved weight to SD card");
-    
-    // send back by xbee
-    //send_xbee();
-    Serial.println("Sent data through xbee to ground station");
+
+    xbee_send(weight);
 
     delay(LOAD_DELAY_MS);
   }
 }
 
 // Test State Machine
-void start_engine_ignition()
+void start_engine_ignition(const String& test_name)
 {
-  Serial.println("Ignition Command Recevied");
+  Serial.println("Ignition Command Received");
+  Serial.print("Test name: ");
+  Serial.println(test_name);
 
   send_electric_sparker_command();
 
-  collect_engine_data();
+  collect_engine_data(test_name);
 
   Serial.println("Engine Firing Complete");
 }
@@ -207,17 +228,23 @@ void setup()
 }
 
 
-void loop() 
+void loop()
 {
-  char c = (char)Serial.read();   // change this read in xbee command -> xbee command will contain information the burn to save the data on the sd card with that name
+  String cmd = xbee_read();   // expects newline-terminated command
 
-  if (c == STAR_IGNITION_KEY) 
+  if (cmd.length() > 0)
   {
-      start_engine_ignition();
-  } 
-  else
-  {
-    Serial.println("Test Stand Waiting Command");
+    Serial.print("Received command: ");
+    Serial.println(cmd);
+
+    // You said: if it receives "st" first part => start ignition
+    // Using "st_" based on your example "st_test1"
+    if (cmd.startsWith("st_"))
+    {
+      String test_name = cmd.substring(3);  // everything after "st_"
+      test_name.trim();
+      start_engine_ignition(test_name);
+    }
   }
 
   delay(LOOP_DELAY_MS);
