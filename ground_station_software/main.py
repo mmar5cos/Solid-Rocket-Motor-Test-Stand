@@ -35,10 +35,10 @@ def cmd_to_log_basename(cmd: str) -> str | None:
 
 def main():
     port = pick_port()
-    baud = 115200  # keep exactly like your working version
+    baud = 9600  # keep exactly like your working version
     READ_TIMEOUT_SEC = 0.1
 
-    FIRE_DURATION_SEC = 15.0  # <-- YOU control this (seconds)
+    FIRE_DURATION_SEC = 25.0  # <-- YOU control this (seconds)
 
     print(f"\nConnecting to {port} @ {baud}...")
     ser = serial.Serial(port, baudrate=baud, timeout=READ_TIMEOUT_SEC)

@@ -35,7 +35,7 @@ const uint8_t MOSFET_PIN = 7;
 
 void xbee_init()
 {
-  xbee.begin(115200); 
+  xbee.begin(9600); 
   Serial.println("Xbee init completed");
 }
 
@@ -243,6 +243,7 @@ void loop()
     {
       String test_name = cmd.substring(3);  // everything after "st_"
       test_name.trim();
+      test_name += ".txt";
       start_engine_ignition(test_name);
     }
   }
