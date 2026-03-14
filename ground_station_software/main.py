@@ -38,7 +38,7 @@ def main():
     baud = 9600  # keep exactly like your working version
     READ_TIMEOUT_SEC = 0.1
 
-    FIRE_DURATION_SEC = 25.0  # <-- YOU control this (seconds)
+    FIRE_DURATION_SEC = 40.0  # <-- YOU control this (seconds)
 
     print(f"\nConnecting to {port} @ {baud}...")
     ser = serial.Serial(port, baudrate=baud, timeout=READ_TIMEOUT_SEC)
@@ -75,23 +75,25 @@ def main():
                 print(f"[log] saving to {log_name}")
 
             # Read for a fixed duration (instead of silence-based)
-            end_time = time.time() + (FIRE_DURATION_SEC if test_name is not None else 3.0)
+            run_duration = FIRE_DURATION_SEC if test_name is not None else 3.0
+            start_time = time.monotonic()
+            end_time = start_time + run_duration
 
-            while time.time() < end_time:
+            while True:
+                remaining = end_time - time.monotonic()
+                if remaining <= 0:
+                    break
+                
+                ser.timeout = min(READ_TIMEOUT_SEC, remaining)
+
                 line = ser.readline().decode("utf-8", errors="replace").strip()
                 if not line:
                     continue
-
+                
                 print(f"[stand] {line}")
                 if log_fp is not None:
                     log_fp.write(line + "\n")
-
-            if log_fp is not None:
-                log_fp.write(f"# end_unix={time.time()}\n")
-                log_fp.close()
-                print("[log] done (returning to command prompt)\n")
-            else:
-                print("[info] done (returning to command prompt)\n")
+                    log_fp.flush()
 
     finally:
         ser.close()
