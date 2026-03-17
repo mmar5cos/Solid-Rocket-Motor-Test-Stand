@@ -7,9 +7,9 @@
 #define TEST_STAND_HZ 50
 #define LOOP_DELAY_MS (1000 / TEST_STAND_HZ)
 
-#define MAX_ENGINE_TIME_SEC 10
+#define MAX_ENGINE_TIME_SEC 30
 #define MAX_ENGINE_TIME_MS  MAX_ENGINE_TIME_SEC * 1000
-#define LOAD_CELL_HZ        10
+#define LOAD_CELL_HZ        80
 #define LOAD_DELAY_MS       (1000 / LOAD_CELL_HZ)
 
 // XBee Configs
@@ -25,10 +25,13 @@ bool sd_initialized = false;
 // HX711 Load Cell Configs
 // Create HX711 object
 HX711 scale;
+const int HX711_DOUT = 2;
+const int HX711_SCK  = 3;
+const int HX711_RATE = 5;
 
 // Calibration factor (use your own value after calibration).
 // Increase to reduce reported weight; decrease to increase reported weight.
-float calibration_factor = 2200.0;
+float calibration_factor = 51700.0;
 
 // Mosfet switch pin
 const uint8_t MOSFET_PIN = 7;
@@ -120,13 +123,11 @@ void load_cell_init()
 {
   Serial.println("Initializing Load Cell...");
 
-  // Initialize HX711 with data pin & clock pin
-  scale.begin(A1, A0);
+  pinMode(HX711_RATE, OUTPUT);
+  digitalWrite(HX711_RATE, HIGH);   // 80 Hz mode
 
-  // Set calibration factor (tune this for your specific load cell)
+  scale.begin(HX711_DOUT, HX711_SCK);
   scale.set_scale(calibration_factor);
-
-  // Reset the scale to zero with no weight
   scale.tare();
 
   Serial.println("Load cell initialized");
@@ -142,7 +143,7 @@ float load_cell_read()
   if (scale.is_ready()) 
   {
     // Get average of 10 readings
-    float weight = scale.get_units(10);
+    float weight = scale.get_units(1);
 
     return weight;
   } 
@@ -179,8 +180,7 @@ void test_stand_init()
   Serial.println("Starting Test Stand Init");
   xbee_init();
   sd_init();
-  //load_cell_init();
-  //mosfet_init();
+  load_cell_init();
   Serial.println("Test Stand Init Complete");
 }
 
@@ -191,20 +191,18 @@ void collect_engine_data(const String& test_name)
 
   for (int time = 0; time < MAX_ENGINE_TIME_MS; time += LOAD_DELAY_MS)
   {
-    // TODO: replace this with load_cell_read()
-    float weight = (float)time;
+      float weight = load_cell_read();
+      Serial.println("Read in weight from load cell:");
+      Serial.println(weight);
 
-    Serial.println("Read in weight from load cell:");
-    Serial.println(weight);
+      //sd_write_float(test_name, weight);
+      Serial.println(time);
+      Serial.println("Saved weight to SD card");
 
+      xbee_send(weight);
 
-    sd_write_float(test_name, weight);
-    Serial.println("Saved weight to SD card");
-
-    xbee_send(weight);
-
-    delay(LOAD_DELAY_MS);
-  }
+      delay(12);   // about 83 Hz
+   }
 }
 
 // Test State Machine
